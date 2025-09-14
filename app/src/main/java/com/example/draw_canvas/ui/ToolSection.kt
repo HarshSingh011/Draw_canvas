@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -67,12 +68,18 @@ fun ToolSection(
             Spacer(modifier = Modifier.width(8.dp))
             // Text field for stroke width
             var strokeText by remember { mutableStateOf(strokeWidth.toInt().toString()) }
-            androidx.compose.material3.OutlinedTextField(
+            // Keep strokeText in sync when parent updates strokeWidth
+            LaunchedEffect(strokeWidth) {
+                val text = strokeWidth.toInt().toString()
+                if (text != strokeText) strokeText = text
+            }
+            OutlinedTextField(
                 value = strokeText,
                 onValueChange = {
                     strokeText = it
-                    it.toFloatOrNull()?.let { v ->
-                        if (v in 2f..30f) onStrokeWidthChange(v)
+                    val v = it.toFloatOrNull()
+                    if (v != null && v in 2f..30f) {
+                        onStrokeWidthChange(v)
                     }
                 },
                 label = { Text("Stroke Size") },

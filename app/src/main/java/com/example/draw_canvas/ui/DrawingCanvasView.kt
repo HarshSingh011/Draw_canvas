@@ -4,6 +4,9 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Matrix
+import android.graphics.Bitmap
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
 import android.graphics.Paint
 import android.graphics.Path
 import android.util.AttributeSet
@@ -24,6 +27,10 @@ class DrawingCanvasView @JvmOverloads constructor(
     private val strokes = mutableListOf<Stroke>()
     private var currentPath: Path? = null
     private var currentPaint: Paint? = null
+    private var bitmap: Bitmap? = null
+    private var bitmapCanvas: Canvas? = null
+    private val bitmapPaint = Paint(Paint.DITHER_FLAG)
+    private lateinit var eraserPaint: Paint
 
     private var selectedTool: Tool = Tool.PEN
     private var strokeColor: Int = Color.BLACK
@@ -35,22 +42,25 @@ class DrawingCanvasView @JvmOverloads constructor(
         when (tool) {
             Tool.ERASER -> {
                 strokeColor = Color.WHITE
-                // Keep strokeWidth as set by user, default to 30 if not set
-                if (strokeWidth < 10f) strokeWidth = 30f
+                // If strokeWidth is not set by user, default to 30
+                if (strokeWidth < 2f || strokeWidth > 30f) strokeWidth = 30f
             }
             Tool.PEN -> {
                 strokeColor = Color.BLACK
-                if (strokeWidth < 2f || strokeWidth > 30f) strokeWidth = 6f
+                // Do not override strokeWidth, just set color
             }
             Tool.PENCIL -> {
                 strokeColor = Color.DKGRAY
-                if (strokeWidth < 2f || strokeWidth > 30f) strokeWidth = 4f
+                // Do not override strokeWidth, just set color
             }
         }
     }
 
     fun setStrokeWidth(width: Float) {
         strokeWidth = width
+        // Apply width to eraser paint and current paint immediately
+        if (this::eraserPaint.isInitialized) eraserPaint.strokeWidth = strokeWidth
+        currentPaint?.strokeWidth = strokeWidth
         // Update color if eraser is selected
         if (selectedTool == Tool.ERASER) {
             strokeColor = Color.WHITE
@@ -81,6 +91,26 @@ class DrawingCanvasView @JvmOverloads constructor(
 
     init {
         setBackgroundColor(Color.WHITE)
+        eraserPaint = Paint().apply {
+            style = Paint.Style.STROKE
+            strokeWidth = this@DrawingCanvasView.strokeWidth
+            isAntiAlias = true
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+            xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
+        }
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        if (w > 0 && h > 0) {
+            bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            bitmapCanvas = Canvas(bitmap!!)
+            // If there are existing strokes, draw them onto the bitmap
+            for (stroke in strokes) {
+                bitmapCanvas?.drawPath(stroke.path, stroke.paint)
+            }
+        }
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -88,11 +118,28 @@ class DrawingCanvasView @JvmOverloads constructor(
         val saveCount = canvas.save()
         canvas.translate(posX, posY)
         canvas.scale(scaleFactor, scaleFactor)
+        // Draw persistent bitmap first
+        bitmap?.let { bmp ->
+            canvas.drawBitmap(bmp, 0f, 0f, bitmapPaint)
+        }
         for (stroke in strokes) {
+            // keep drawing strokes list for compatibility if needed
             canvas.drawPath(stroke.path, stroke.paint)
         }
-        if (currentPath != null && currentPaint != null) {
-            canvas.drawPath(currentPath!!, currentPaint!!)
+        if (currentPath != null) {
+            if (selectedTool == Tool.ERASER) {
+                // Draw eraser path as a visible outline
+                val eraserPaint = Paint().apply {
+                    color = Color.RED
+                    style = Paint.Style.STROKE
+                    strokeWidth = strokeWidth
+                    isAntiAlias = true
+                    pathEffect = null
+                }
+                canvas.drawPath(currentPath!!, eraserPaint)
+            } else if (currentPaint != null) {
+                canvas.drawPath(currentPath!!, currentPaint!!)
+            }
         }
         canvas.restoreToCount(saveCount)
     }
@@ -106,16 +153,21 @@ class DrawingCanvasView @JvmOverloads constructor(
                 if (pointerCount == 1) {
                     currentPath = Path()
                     currentPath?.moveTo(event.x, event.y)
-                    currentPaint = Paint().apply {
-                        color = strokeColor
-                        style = Paint.Style.STROKE
-                        strokeWidth = strokeWidth
-                        isAntiAlias = true
-                        if (selectedTool == Tool.PENCIL) {
-                            alpha = 120
-                        }
-                        if (selectedTool == Tool.ERASER) {
+                    if (selectedTool == Tool.ERASER) {
+                        // Eraser: do not create a normal paint; use eraserPaint
+                        currentPaint = null
+                        eraserPaint.strokeWidth = strokeWidth
+                    } else {
+                        currentPaint = Paint().apply {
+                            color = strokeColor
+                            style = Paint.Style.STROKE
+                            this.strokeWidth = this@DrawingCanvasView.strokeWidth
+                            isAntiAlias = true
+                            strokeCap = Paint.Cap.ROUND
                             strokeJoin = Paint.Join.ROUND
+                            if (selectedTool == Tool.PENCIL) {
+                                alpha = 120
+                            }
                         }
                     }
                     isPanning = false
@@ -129,8 +181,15 @@ class DrawingCanvasView @JvmOverloads constructor(
                 lastFocusY = event.getY(0)
             }
             MotionEvent.ACTION_MOVE -> {
-                if (pointerCount == 1 && !isPanning) {
+                    if (pointerCount == 1 && !isPanning) {
                     currentPath?.lineTo(event.x, event.y)
+                    if (selectedTool == Tool.ERASER) {
+                        // Erase directly on bitmap as we move
+                        currentPath?.let { path ->
+                            eraserPaint.strokeWidth = strokeWidth
+                            bitmapCanvas?.drawPath(path, eraserPaint)
+                        }
+                    }
                     invalidate()
                 } else if (pointerCount >= 2) {
                     val focusX = event.getX(0)
@@ -143,11 +202,19 @@ class DrawingCanvasView @JvmOverloads constructor(
                 }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                if (!isPanning && currentPath != null && currentPaint != null) {
-                    strokes.add(Stroke(currentPath!!, currentPaint!!))
+                if (!isPanning && currentPath != null) {
+                    if (selectedTool == Tool.ERASER) {
+                        // Already erased on bitmap during move; nothing more to do
+                        invalidate()
+                    } else if (currentPaint != null) {
+                        // Commit path to bitmap so it persists and reflects stroke width/color
+                        bitmapCanvas?.drawPath(currentPath!!, currentPaint!!)
+                        // Also keep stroke in list (optional)
+                        strokes.add(Stroke(Path(currentPath), Paint(currentPaint)))
+                        invalidate()
+                    }
                     currentPath = null
                     currentPaint = null
-                    invalidate()
                 }
                 isPanning = false
             }

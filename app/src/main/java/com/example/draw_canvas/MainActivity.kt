@@ -13,7 +13,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.viewinterop.AndroidView
 import com.example.draw_canvas.ui.DrawingCanvasView
+import com.example.draw_canvas.ui.ToolSection
 import com.example.draw_canvas.ui.theme.Draw_CanvasTheme
 
 class MainActivity : ComponentActivity() {
@@ -30,7 +32,7 @@ class MainActivity : ComponentActivity() {
 fun DrawingScreen() {
     val selectedTool = remember { mutableStateOf("Pen") }
     val strokeWidth = remember { mutableStateOf(6f) }
-    var drawingView: DrawingCanvasView? = null
+    val drawingViewState = remember { mutableStateOf<DrawingCanvasView?>(null) }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -39,7 +41,7 @@ fun DrawingScreen() {
                 selectedTool = selectedTool.value,
                 onToolSelected = {
                     selectedTool.value = it
-                    drawingView?.let { view ->
+                    drawingViewState.value?.let { view ->
                         when (it) {
                             "Pen" -> view.setTool(DrawingCanvasView.Tool.PEN)
                             "Pencil" -> view.setTool(DrawingCanvasView.Tool.PENCIL)
@@ -50,7 +52,7 @@ fun DrawingScreen() {
                 strokeWidth = strokeWidth.value,
                 onStrokeWidthChange = {
                     strokeWidth.value = it
-                    drawingView?.setStrokeWidth(it)
+                    drawingViewState.value?.setStrokeWidth(it)
                 }
             )
         }
@@ -58,7 +60,7 @@ fun DrawingScreen() {
         AndroidView(
             factory = { context ->
                 DrawingCanvasView(context).also { view ->
-                    drawingView = view
+                    drawingViewState.value = view
                     when (selectedTool.value) {
                         "Pen" -> view.setTool(DrawingCanvasView.Tool.PEN)
                         "Pencil" -> view.setTool(DrawingCanvasView.Tool.PENCIL)
