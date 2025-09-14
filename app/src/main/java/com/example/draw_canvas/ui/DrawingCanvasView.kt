@@ -35,6 +35,7 @@ class DrawingCanvasView @JvmOverloads constructor(
     private var selectedTool: Tool = Tool.PEN
     private var strokeColor: Int = Color.BLACK
     private var strokeWidth: Float = 6f
+    private var eraserSize: Float = 30f
     enum class Tool { PEN, PENCIL, ERASER }
 
     fun setTool(tool: Tool) {
@@ -69,6 +70,11 @@ class DrawingCanvasView @JvmOverloads constructor(
 
     fun setStrokeColor(color: Int) {
         strokeColor = color
+    }
+
+    fun setEraserSize(size: Float) {
+        eraserSize = size
+        if (this::eraserPaint.isInitialized) eraserPaint.strokeWidth = size
     }
 
     private var scaleFactor = 1.0f
@@ -123,14 +129,17 @@ class DrawingCanvasView @JvmOverloads constructor(
         // Do not redraw committed strokes here; bitmap holds persistent pixels
         if (currentPath != null) {
             if (selectedTool == Tool.ERASER) {
-                val eraserPaint = Paint().apply {
+                val rectPaint = Paint().apply {
                     color = Color.RED
                     style = Paint.Style.STROKE
-                    strokeWidth = strokeWidth
+                    strokeWidth = 2f
                     isAntiAlias = true
-                    pathEffect = null
                 }
-                canvas.drawPath(currentPath!!, eraserPaint)
+                // draw a rectangle representing eraser area around last touch
+                val lastX = lastTouchX
+                val lastY = lastTouchY
+                val half = eraserSize / 2f
+                canvas.drawRect(lastX - half, lastY - half, lastX + half, lastY + half, rectPaint)
             } else if (currentPaint != null) {
                 canvas.drawPath(currentPath!!, currentPaint!!)
             }
@@ -177,10 +186,10 @@ class DrawingCanvasView @JvmOverloads constructor(
                     if (pointerCount == 1 && !isPanning) {
                     currentPath?.lineTo(event.x, event.y)
                     if (selectedTool == Tool.ERASER) {
-                        currentPath?.let { path ->
-                            eraserPaint.strokeWidth = strokeWidth
-                            bitmapCanvas?.drawPath(path, eraserPaint)
-                        }
+                        val x = event.x
+                        val y = event.y
+                        val half = eraserSize / 2f
+                        bitmapCanvas?.drawRect(x - half, y - half, x + half, y + half, eraserPaint)
                     }
                     invalidate()
                 } else if (pointerCount >= 2) {

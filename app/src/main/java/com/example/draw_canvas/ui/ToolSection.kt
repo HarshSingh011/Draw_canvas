@@ -21,7 +21,9 @@ fun ToolSection(
     selectedTool: String,
     onToolSelected: (String) -> Unit,
     strokeWidth: Float,
-    onStrokeWidthChange: (Float) -> Unit
+    onStrokeWidthChange: (Float) -> Unit,
+    eraserSize: Float,
+    onEraserSizeChange: (Float) -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -65,7 +67,24 @@ fun ToolSection(
                 }
             }
             Spacer(modifier = Modifier.width(8.dp))
-            
+            var eraserText by remember { mutableStateOf(eraserSize.toInt().toString()) }
+            LaunchedEffect(eraserSize) {
+                val t = eraserSize.toInt().toString()
+                if (t != eraserText) eraserText = t
+            }
+            OutlinedTextField(
+                value = eraserText,
+                onValueChange = {
+                    eraserText = it
+                    val v = it.toFloatOrNull()
+                    if (v != null && v >= 2f && v <= 200f) {
+                        onEraserSizeChange(v)
+                    }
+                },
+                label = { Text("Eraser Size") },
+                singleLine = true,
+                modifier = Modifier.width(100.dp)
+            )
             var strokeText by remember { mutableStateOf(strokeWidth.toInt().toString()) }
             LaunchedEffect(strokeWidth) {
                 val text = strokeWidth.toInt().toString()

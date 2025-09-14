@@ -32,12 +32,13 @@ class MainActivity : ComponentActivity() {
 fun DrawingScreen() {
     val selectedTool = remember { mutableStateOf("Pen") }
     val strokeWidth = remember { mutableStateOf(6f) }
+    val eraserSize = remember { mutableStateOf(30f) }
     val drawingViewState = remember { mutableStateOf<DrawingCanvasView?>(null) }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
-            ToolSection(
+                ToolSection(
                 selectedTool = selectedTool.value,
                 onToolSelected = {
                     selectedTool.value = it
@@ -53,6 +54,11 @@ fun DrawingScreen() {
                 onStrokeWidthChange = {
                     strokeWidth.value = it
                     drawingViewState.value?.setStrokeWidth(it)
+                },
+                eraserSize = eraserSize.value,
+                onEraserSizeChange = {
+                    eraserSize.value = it
+                    drawingViewState.value?.setEraserSize(it)
                 }
             )
         }
@@ -67,6 +73,7 @@ fun DrawingScreen() {
                         "Eraser" -> view.setTool(DrawingCanvasView.Tool.ERASER)
                     }
                     view.setStrokeWidth(strokeWidth.value)
+                    view.setEraserSize(eraserSize.value)
                 }
             },
             modifier = Modifier
