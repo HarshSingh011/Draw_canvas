@@ -40,7 +40,6 @@ fun ToolSection(
             ToolButton("Pencil", selectedTool == "Pencil", onToolSelected)
             ToolButton("Eraser", selectedTool == "Eraser", onToolSelected)
             Spacer(modifier = Modifier.width(16.dp))
-            // Dropdown for stroke width
             var expanded by remember { mutableStateOf(false) }
             Box {
                 Text(
@@ -66,7 +65,7 @@ fun ToolSection(
                 }
             }
             Spacer(modifier = Modifier.width(8.dp))
-            // Text field for stroke width
+            
             var strokeText by remember { mutableStateOf(strokeWidth.toInt().toString()) }
             // Keep strokeText in sync when parent updates strokeWidth
             LaunchedEffect(strokeWidth) {

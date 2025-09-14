@@ -106,7 +106,6 @@ class DrawingCanvasView @JvmOverloads constructor(
         if (w > 0 && h > 0) {
             bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
             bitmapCanvas = Canvas(bitmap!!)
-            // If there are existing strokes, draw them onto the bitmap
             for (stroke in strokes) {
                 bitmapCanvas?.drawPath(stroke.path, stroke.paint)
             }
@@ -118,17 +117,12 @@ class DrawingCanvasView @JvmOverloads constructor(
         val saveCount = canvas.save()
         canvas.translate(posX, posY)
         canvas.scale(scaleFactor, scaleFactor)
-        // Draw persistent bitmap first
         bitmap?.let { bmp ->
             canvas.drawBitmap(bmp, 0f, 0f, bitmapPaint)
         }
-        for (stroke in strokes) {
-            // keep drawing strokes list for compatibility if needed
-            canvas.drawPath(stroke.path, stroke.paint)
-        }
+        // Do not redraw committed strokes here; bitmap holds persistent pixels
         if (currentPath != null) {
             if (selectedTool == Tool.ERASER) {
-                // Draw eraser path as a visible outline
                 val eraserPaint = Paint().apply {
                     color = Color.RED
                     style = Paint.Style.STROKE
@@ -154,7 +148,6 @@ class DrawingCanvasView @JvmOverloads constructor(
                     currentPath = Path()
                     currentPath?.moveTo(event.x, event.y)
                     if (selectedTool == Tool.ERASER) {
-                        // Eraser: do not create a normal paint; use eraserPaint
                         currentPaint = null
                         eraserPaint.strokeWidth = strokeWidth
                     } else {
@@ -184,7 +177,6 @@ class DrawingCanvasView @JvmOverloads constructor(
                     if (pointerCount == 1 && !isPanning) {
                     currentPath?.lineTo(event.x, event.y)
                     if (selectedTool == Tool.ERASER) {
-                        // Erase directly on bitmap as we move
                         currentPath?.let { path ->
                             eraserPaint.strokeWidth = strokeWidth
                             bitmapCanvas?.drawPath(path, eraserPaint)
@@ -204,12 +196,9 @@ class DrawingCanvasView @JvmOverloads constructor(
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 if (!isPanning && currentPath != null) {
                     if (selectedTool == Tool.ERASER) {
-                        // Already erased on bitmap during move; nothing more to do
                         invalidate()
                     } else if (currentPaint != null) {
-                        // Commit path to bitmap so it persists and reflects stroke width/color
                         bitmapCanvas?.drawPath(currentPath!!, currentPaint!!)
-                        // Also keep stroke in list (optional)
                         strokes.add(Stroke(Path(currentPath), Paint(currentPaint)))
                         invalidate()
                     }
@@ -224,6 +213,8 @@ class DrawingCanvasView @JvmOverloads constructor(
 
     fun clearCanvas() {
         strokes.clear()
+        bitmap?.eraseColor(android.graphics.Color.TRANSPARENT)
+        bitmapCanvas = bitmap?.let { Canvas(it) }
         invalidate()
     }
 }
