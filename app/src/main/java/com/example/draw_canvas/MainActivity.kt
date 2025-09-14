@@ -13,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import com.example.draw_canvas.ui.DrawingCanvasView
 import com.example.draw_canvas.ui.theme.Draw_CanvasTheme
 
 class MainActivity : ComponentActivity() {
@@ -20,37 +21,35 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            Draw_CanvasTheme {
-                DrawingScreen()
-            }
+            DrawingScreen()
         }
     }
 }
 
 @Composable
 fun DrawingScreen() {
-    var selectedTool by remember { mutableStateOf("Pen") }
-    var strokeWidth by remember { mutableStateOf(6f) }
-    var drawingView: com.example.draw_canvas.ui.DrawingCanvasView? by remember { mutableStateOf(null) }
+    val selectedTool = remember { mutableStateOf("Pen") }
+    val strokeWidth = remember { mutableStateOf(6f) }
+    var drawingView: DrawingCanvasView? = null
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
             com.example.draw_canvas.ui.ToolSection(
-                selectedTool = selectedTool,
+                selectedTool = selectedTool.value,
                 onToolSelected = {
-                    selectedTool = it
+                    selectedTool.value = it
                     drawingView?.let { view ->
                         when (it) {
-                            "Pen" -> view.setTool(com.example.draw_canvas.ui.DrawingCanvasView.Tool.PEN)
-                            "Pencil" -> view.setTool(com.example.draw_canvas.ui.DrawingCanvasView.Tool.PENCIL)
-                            "Eraser" -> view.setTool(com.example.draw_canvas.ui.DrawingCanvasView.Tool.ERASER)
+                            "Pen" -> view.setTool(DrawingCanvasView.Tool.PEN)
+                            "Pencil" -> view.setTool(DrawingCanvasView.Tool.PENCIL)
+                            "Eraser" -> view.setTool(DrawingCanvasView.Tool.ERASER)
                         }
                     }
                 },
-                strokeWidth = strokeWidth,
+                strokeWidth = strokeWidth.value,
                 onStrokeWidthChange = {
-                    strokeWidth = it
+                    strokeWidth.value = it
                     drawingView?.setStrokeWidth(it)
                 }
             )
@@ -58,14 +57,14 @@ fun DrawingScreen() {
     ) { innerPadding ->
         androidx.compose.ui.viewinterop.AndroidView(
             factory = { context ->
-                com.example.draw_canvas.ui.DrawingCanvasView(context).also { view ->
+                DrawingCanvasView(context).also { view ->
                     drawingView = view
-                    when (selectedTool) {
-                        "Pen" -> view.setTool(com.example.draw_canvas.ui.DrawingCanvasView.Tool.PEN)
-                        "Pencil" -> view.setTool(com.example.draw_canvas.ui.DrawingCanvasView.Tool.PENCIL)
-                        "Eraser" -> view.setTool(com.example.draw_canvas.ui.DrawingCanvasView.Tool.ERASER)
+                    when (selectedTool.value) {
+                        "Pen" -> view.setTool(DrawingCanvasView.Tool.PEN)
+                        "Pencil" -> view.setTool(DrawingCanvasView.Tool.PENCIL)
+                        "Eraser" -> view.setTool(DrawingCanvasView.Tool.ERASER)
                     }
-                    view.setStrokeWidth(strokeWidth)
+                    view.setStrokeWidth(strokeWidth.value)
                 }
             },
             modifier = Modifier
