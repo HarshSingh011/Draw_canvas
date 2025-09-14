@@ -13,7 +13,6 @@ import android.view.View
 import kotlin.math.max
 import kotlin.math.min
 
-// Data model for a single stroke
 class Stroke(val path: Path, val paint: Paint)
 
 class DrawingCanvasView @JvmOverloads constructor(
@@ -26,7 +25,6 @@ class DrawingCanvasView @JvmOverloads constructor(
     private var currentPath: Path? = null
     private var currentPaint: Paint? = null
 
-    // Tool and style state
     private var selectedTool: Tool = Tool.PEN
     private var strokeColor: Int = Color.BLACK
     private var strokeWidth: Float = 6f
@@ -34,28 +32,35 @@ class DrawingCanvasView @JvmOverloads constructor(
 
     fun setTool(tool: Tool) {
         selectedTool = tool
-        // Set color for eraser
-        if (tool == Tool.ERASER) {
-            strokeColor = Color.WHITE
-            strokeWidth = 30f
-        } else if (tool == Tool.PEN) {
-            strokeColor = Color.BLACK
-            strokeWidth = 6f
-        } else if (tool == Tool.PENCIL) {
-            strokeColor = Color.DKGRAY
-            strokeWidth = 4f
+        when (tool) {
+            Tool.ERASER -> {
+                strokeColor = Color.WHITE
+                // Keep strokeWidth as set by user, default to 30 if not set
+                if (strokeWidth < 10f) strokeWidth = 30f
+            }
+            Tool.PEN -> {
+                strokeColor = Color.BLACK
+                if (strokeWidth < 2f || strokeWidth > 30f) strokeWidth = 6f
+            }
+            Tool.PENCIL -> {
+                strokeColor = Color.DKGRAY
+                if (strokeWidth < 2f || strokeWidth > 30f) strokeWidth = 4f
+            }
         }
     }
 
     fun setStrokeWidth(width: Float) {
         strokeWidth = width
+        // Update color if eraser is selected
+        if (selectedTool == Tool.ERASER) {
+            strokeColor = Color.WHITE
+        }
     }
 
     fun setStrokeColor(color: Int) {
         strokeColor = color
     }
 
-    // For pan and zoom
     private var scaleFactor = 1.0f
     private var lastFocusX = 0f
     private var lastFocusY = 0f
@@ -108,6 +113,9 @@ class DrawingCanvasView @JvmOverloads constructor(
                         isAntiAlias = true
                         if (selectedTool == Tool.PENCIL) {
                             alpha = 120
+                        }
+                        if (selectedTool == Tool.ERASER) {
+                            strokeJoin = Paint.Join.ROUND
                         }
                     }
                     isPanning = false

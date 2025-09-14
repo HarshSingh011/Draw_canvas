@@ -22,30 +22,64 @@ fun ToolSection(
     strokeWidth: Float,
     onStrokeWidthChange: (Float) -> Unit
 ) {
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color(0xFFF5F5F5))
-            .padding(8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .height(80.dp)
+            .background(Color(0xFFEEEEEE), shape = androidx.compose.foundation.shape.RoundedCornerShape(40.dp))
+            .padding(horizontal = 24.dp, vertical = 12.dp),
+        contentAlignment = Alignment.Center
     ) {
         Row(
+            verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceEvenly,
             modifier = Modifier.fillMaxWidth()
         ) {
             ToolButton("Pen", selectedTool == "Pen", onToolSelected)
             ToolButton("Pencil", selectedTool == "Pencil", onToolSelected)
             ToolButton("Eraser", selectedTool == "Eraser", onToolSelected)
+            Spacer(modifier = Modifier.width(16.dp))
+            // Dropdown for stroke width
+            var expanded by remember { mutableStateOf(false) }
+            Box {
+                Text(
+                    "Stroke: ${strokeWidth.toInt()}",
+                    modifier = Modifier
+                        .clickable { expanded = true }
+                        .background(Color.White, shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                        .padding(8.dp)
+                )
+                androidx.compose.material3.DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false }
+                ) {
+                    listOf(2f, 4f, 6f, 8f, 12f, 16f, 20f, 24f, 30f).forEach { value ->
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("${value.toInt()}") },
+                            onClick = {
+                                onStrokeWidthChange(value)
+                                expanded = false
+                            }
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            // Text field for stroke width
+            var strokeText by remember { mutableStateOf(strokeWidth.toInt().toString()) }
+            androidx.compose.material3.OutlinedTextField(
+                value = strokeText,
+                onValueChange = {
+                    strokeText = it
+                    it.toFloatOrNull()?.let { v ->
+                        if (v in 2f..30f) onStrokeWidthChange(v)
+                    }
+                },
+                label = { Text("Stroke Size") },
+                singleLine = true,
+                modifier = Modifier.width(80.dp)
+            )
         }
-        Spacer(modifier = Modifier.height(8.dp))
-        Text("Stroke Width: ${strokeWidth.toInt()}")
-        Slider(
-            value = strokeWidth,
-            onValueChange = onStrokeWidthChange,
-            valueRange = 2f..30f,
-            steps = 7,
-            modifier = Modifier.padding(horizontal = 16.dp)
-        )
     }
 }
 

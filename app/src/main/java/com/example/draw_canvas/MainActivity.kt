@@ -35,7 +35,7 @@ fun DrawingScreen() {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
-            com.example.draw_canvas.ui.ToolSection(
+            ToolSection(
                 selectedTool = selectedTool.value,
                 onToolSelected = {
                     selectedTool.value = it
@@ -55,7 +55,7 @@ fun DrawingScreen() {
             )
         }
     ) { innerPadding ->
-        androidx.compose.ui.viewinterop.AndroidView(
+        AndroidView(
             factory = { context ->
                 DrawingCanvasView(context).also { view ->
                     drawingView = view
