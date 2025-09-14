@@ -67,7 +67,6 @@ fun ToolSection(
             Spacer(modifier = Modifier.width(8.dp))
             
             var strokeText by remember { mutableStateOf(strokeWidth.toInt().toString()) }
-            // Keep strokeText in sync when parent updates strokeWidth
             LaunchedEffect(strokeWidth) {
                 val text = strokeWidth.toInt().toString()
                 if (text != strokeText) strokeText = text
