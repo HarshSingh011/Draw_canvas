@@ -180,6 +180,7 @@ class DrawingCanvasView @JvmOverloads constructor(
 
     private val scaleDetector = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
         override fun onScale(detector: ScaleGestureDetector): Boolean {
+            if (selectedTool == Tool.RULER) return true // disable zoom while manipulating ruler
             val prevScale = scaleFactor
             var newScale = prevScale * detector.scaleFactor
             newScale = max(0.5f, min(newScale, 3.0f))
@@ -381,8 +382,8 @@ class DrawingCanvasView @JvmOverloads constructor(
                     // Only start drawing if touch is within canvas bounds
                     if (isWithinCanvasBounds(canvasX, canvasY)) {
                         if (selectedTool == Tool.RULER) {
-                            // Project the touch onto the ruler line
-                            val proj = RulerHelper.projectPointToRuler(canvasX, canvasY, rulerCenterX, rulerCenterY, rulerAngle, rulerLength)
+                            // Project the touch onto the nearest ruler edge so touching a side draws along that edge
+                            val proj = RulerHelper.projectPointToRulerEdge(canvasX, canvasY, rulerCenterX, rulerCenterY, rulerAngle, rulerLength, rulerWidth)
                             currentRulerStartX = proj[0]
                             currentRulerStartY = proj[1]
                             currentRulerEndX = proj[0]
@@ -460,8 +461,8 @@ class DrawingCanvasView @JvmOverloads constructor(
                     // Only continue drawing if within canvas bounds
                     if (isWithinCanvasBounds(canvasX, canvasY)) {
                         if (selectedTool == Tool.RULER && currentRulerStartX != null) {
-                            // Project current touch onto ruler and update end
-                            val proj = RulerHelper.projectPointToRuler(canvasX, canvasY, rulerCenterX, rulerCenterY, rulerAngle, rulerLength)
+                            // Project current touch onto nearest ruler edge and update end
+                            val proj = RulerHelper.projectPointToRulerEdge(canvasX, canvasY, rulerCenterX, rulerCenterY, rulerAngle, rulerLength, rulerWidth)
                             var ex = proj[0]
                             var ey = proj[1]
                             // Snap to nearby stroke endpoints/midpoints
@@ -502,10 +503,12 @@ class DrawingCanvasView @JvmOverloads constructor(
                     }
                     val focusX = sumX / count
                     val focusY = sumY / count
-                    // Recompute pos so that the stored canvas focus stays under the fingers
-                    posX = focusX / scaleFactor - lastCanvasFocusX
-                    posY = focusY / scaleFactor - lastCanvasFocusY
-                    // Ruler manipulation: if ruler is selected and two fingers active, rotate/drag
+                    // If not manipulating ruler, pan the canvas keeping the stored canvas focus under the fingers
+                    if (selectedTool != Tool.RULER) {
+                        posX = focusX / scaleFactor - lastCanvasFocusX
+                        posY = focusY / scaleFactor - lastCanvasFocusY
+                    }
+                    // Ruler manipulation: if ruler is selected and two fingers active, rotate/drag (no panning)
                     if (selectedTool == Tool.RULER && event.pointerCount >= 2) {
                         val x0 = event.getX(0)
                         val y0 = event.getY(0)
