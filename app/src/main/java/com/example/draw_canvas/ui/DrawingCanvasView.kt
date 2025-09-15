@@ -85,15 +85,33 @@ class DrawingCanvasView @JvmOverloads constructor(
     private var lastTouchX = 0f
     private var lastTouchY = 0f
     private var isPanning = false
+    
+    // Matrix for coordinate transformation
+    private val transformMatrix = Matrix()
+    private val inverseMatrix = Matrix()
 
     private val scaleDetector = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
         override fun onScale(detector: ScaleGestureDetector): Boolean {
             scaleFactor *= detector.scaleFactor
             scaleFactor = max(0.5f, min(scaleFactor, 3.0f))
+            updateTransformMatrix()
             invalidate()
             return true
         }
     })
+    
+    private fun updateTransformMatrix() {
+        transformMatrix.reset()
+        transformMatrix.postTranslate(posX, posY)
+        transformMatrix.postScale(scaleFactor, scaleFactor)
+        transformMatrix.invert(inverseMatrix)
+    }
+    
+    private fun screenToCanvasCoords(screenX: Float, screenY: Float): FloatArray {
+        val coords = floatArrayOf(screenX, screenY)
+        inverseMatrix.mapPoints(coords)
+        return coords
+    }
 
     init {
         setBackgroundColor(Color.WHITE)
@@ -105,6 +123,7 @@ class DrawingCanvasView @JvmOverloads constructor(
             strokeJoin = Paint.Join.ROUND
             xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
         }
+        updateTransformMatrix()
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -154,11 +173,15 @@ class DrawingCanvasView @JvmOverloads constructor(
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 if (pointerCount == 1) {
+                    val canvasCoords = screenToCanvasCoords(event.x, event.y)
+                    val canvasX = canvasCoords[0]
+                    val canvasY = canvasCoords[1]
+                    
                     currentPath = Path()
-                    currentPath?.moveTo(event.x, event.y)
+                    currentPath?.moveTo(canvasX, canvasY)
                     if (selectedTool == Tool.ERASER) {
                         currentPaint = null
-                        eraserPaint.strokeWidth = strokeWidth
+                        eraserPaint.strokeWidth = eraserSize
                     } else {
                         currentPaint = Paint().apply {
                             color = strokeColor
@@ -173,9 +196,9 @@ class DrawingCanvasView @JvmOverloads constructor(
                         }
                     }
                     isPanning = false
+                    lastTouchX = canvasX
+                    lastTouchY = canvasY
                 }
-                lastTouchX = event.x
-                lastTouchY = event.y
             }
             MotionEvent.ACTION_POINTER_DOWN -> {
                 isPanning = true
@@ -183,14 +206,18 @@ class DrawingCanvasView @JvmOverloads constructor(
                 lastFocusY = event.getY(0)
             }
             MotionEvent.ACTION_MOVE -> {
-                    if (pointerCount == 1 && !isPanning) {
-                    currentPath?.lineTo(event.x, event.y)
+                if (pointerCount == 1 && !isPanning) {
+                    val canvasCoords = screenToCanvasCoords(event.x, event.y)
+                    val canvasX = canvasCoords[0]
+                    val canvasY = canvasCoords[1]
+                    
+                    currentPath?.lineTo(canvasX, canvasY)
                     if (selectedTool == Tool.ERASER) {
-                        val x = event.x
-                        val y = event.y
                         val half = eraserSize / 2f
-                        bitmapCanvas?.drawRect(x - half, y - half, x + half, y + half, eraserPaint)
+                        bitmapCanvas?.drawRect(canvasX - half, canvasY - half, canvasX + half, canvasY + half, eraserPaint)
                     }
+                    lastTouchX = canvasX
+                    lastTouchY = canvasY
                     invalidate()
                 } else if (pointerCount >= 2) {
                     val focusX = event.getX(0)
@@ -199,6 +226,7 @@ class DrawingCanvasView @JvmOverloads constructor(
                     posY += focusY - lastFocusY
                     lastFocusX = focusX
                     lastFocusY = focusY
+                    updateTransformMatrix()
                     invalidate()
                 }
             }
