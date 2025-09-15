@@ -1,5 +1,8 @@
 package com.example.draw_canvas.ui
 
+import com.example.draw_canvas.model.Stroke
+import com.example.draw_canvas.ruler.RulerHelper
+
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
@@ -14,7 +17,7 @@ import android.view.View
 import kotlin.math.max
 import kotlin.math.min
 
-class Stroke(val path: Path, val paint: Paint)
+// Use model.Stroke data class from `com.example.draw_canvas.model`
 
 class DrawingCanvasView @JvmOverloads constructor(
     context: Context,
@@ -35,7 +38,23 @@ class DrawingCanvasView @JvmOverloads constructor(
     private var strokeColor: Int = Color.BLACK
     private var strokeWidth: Float = 6f
     private var eraserSize: Float = 30f
-    enum class Tool { PEN, PENCIL, ERASER }
+    // Ruler settings
+    private var rulerCenterX = 500f
+    private var rulerCenterY = 500f
+    private var rulerAngle = 0.0f // radians
+    private var rulerLength = 1200f // canvas units
+    private var initialFingerAngle = 0.0
+    private var initialRulerAngle = 0.0
+    private var currentRulerStartX: Float? = null
+    private var currentRulerStartY: Float? = null
+    private var currentRulerEndX: Float? = null
+    private var currentRulerEndY: Float? = null
+    private var currentStrokeStartX = 0f
+    private var currentStrokeStartY = 0f
+    private val snapAngles = floatArrayOf(0f,30f,45f,60f,90f)
+    private val snapAngleThresholdDeg = 7f
+    private val anchorSnapDistancePx = 28f
+    enum class Tool { PEN, PENCIL, ERASER, RULER }
 
     fun setTool(tool: Tool) {
         selectedTool = tool
@@ -48,6 +67,9 @@ class DrawingCanvasView @JvmOverloads constructor(
             }
             Tool.PENCIL -> {
                 strokeColor = Color.DKGRAY
+            }
+            Tool.RULER -> {
+                // Ruler selected - no color change required here
             }
         }
     }
@@ -67,6 +89,25 @@ class DrawingCanvasView @JvmOverloads constructor(
             eraserPaint.strokeWidth = size
             if (this::eraserStrokePaint.isInitialized) eraserStrokePaint.strokeWidth = size
         }
+    }
+
+    // Ruler control setters callable from outside
+    fun setRulerLength(length: Float) {
+        rulerLength = length
+        invalidate()
+    }
+
+    fun resetRuler() {
+        // Reset to center of canvas and zero angle
+        rulerCenterX = actualCanvasWidth / 2f
+        rulerCenterY = actualCanvasHeight / 2f
+        rulerAngle = 0f
+        invalidate()
+    }
+
+    fun setRulerAngle(deg: Float) {
+        rulerAngle = Math.toRadians(deg.toDouble()).toFloat()
+        invalidate()
     }
 
     private var scaleFactor = 1.0f
@@ -111,6 +152,20 @@ class DrawingCanvasView @JvmOverloads constructor(
         isAntiAlias = true
     }
 
+    // Ruler paints and size
+    private var rulerWidth = 36f
+    private val rulerFillPaint = Paint().apply {
+        color = Color.argb(140, 200, 230, 255) // glassy light-blue
+        style = Paint.Style.FILL
+        isAntiAlias = true
+    }
+    private val rulerBorderPaint = Paint().apply {
+        color = Color.BLACK
+        style = Paint.Style.STROKE
+        strokeWidth = 3f
+        isAntiAlias = true
+    }
+
     // Debug overlay state
     private var lastScreenX = 0f
     private var lastScreenY = 0f
@@ -134,9 +189,9 @@ class DrawingCanvasView @JvmOverloads constructor(
             // current inverse matrix, then recomputing pos so the same canvas point
             // maps to the same screen focus after scaling.
             val before = floatArrayOf(focusX, focusY)
-            if (!inverseMatrix.isIdentity()) {
+            try {
                 inverseMatrix.mapPoints(before)
-            } else {
+            } catch (e: Exception) {
                 // Fallback to manual mapping
                 before[0] = focusX / prevScale - posX
                 before[1] = focusY / prevScale - posY
@@ -257,6 +312,21 @@ class DrawingCanvasView @JvmOverloads constructor(
             }
         }
 
+        // Draw ruler when selected as a rotated rectangle (glassy fill + black border)
+    if (selectedTool == Tool.RULER) {
+            val corners = RulerHelper.computeRulerCorners(rulerCenterX, rulerCenterY, rulerAngle, rulerLength, rulerWidth)
+            val path = Path().apply {
+                moveTo(corners[0], corners[1])
+                lineTo(corners[2], corners[3])
+                lineTo(corners[4], corners[5])
+                lineTo(corners[6], corners[7])
+                close()
+            }
+
+            canvas.drawPath(path, rulerFillPaint)
+            canvas.drawPath(path, rulerBorderPaint)
+        }
+
         // Eraser preview: show white-filled rect with red border at mapped location
         if (selectedTool == Tool.ERASER && isTouching) {
             // restore to draw overlay in view coordinates
@@ -310,8 +380,21 @@ class DrawingCanvasView @JvmOverloads constructor(
                     
                     // Only start drawing if touch is within canvas bounds
                     if (isWithinCanvasBounds(canvasX, canvasY)) {
-                        currentPath = Path()
-                        currentPath?.moveTo(canvasX, canvasY)
+                        if (selectedTool == Tool.RULER) {
+                            // Project the touch onto the ruler line
+                            val proj = RulerHelper.projectPointToRuler(canvasX, canvasY, rulerCenterX, rulerCenterY, rulerAngle, rulerLength)
+                            currentRulerStartX = proj[0]
+                            currentRulerStartY = proj[1]
+                            currentRulerEndX = proj[0]
+                            currentRulerEndY = proj[1]
+                            currentStrokeStartX = proj[0]
+                            currentStrokeStartY = proj[1]
+                        } else {
+                            currentPath = Path()
+                            currentPath?.moveTo(canvasX, canvasY)
+                            currentStrokeStartX = canvasX
+                            currentStrokeStartY = canvasY
+                        }
                         
                         if (selectedTool == Tool.ERASER) {
                             // For eraser, do not set currentPaint; erase directly to bitmap
@@ -352,6 +435,15 @@ class DrawingCanvasView @JvmOverloads constructor(
                 val canvasFocus = screenToCanvasCoords(lastFocusX, lastFocusY)
                 lastCanvasFocusX = canvasFocus[0]
                 lastCanvasFocusY = canvasFocus[1]
+                // If ruler active, initialize rotation/drag state
+                if (selectedTool == Tool.RULER && event.pointerCount >= 2) {
+                    val x0 = event.getX(0)
+                    val y0 = event.getY(0)
+                    val x1 = event.getX(1)
+                    val y1 = event.getY(1)
+                    initialFingerAngle = kotlin.math.atan2((y1 - y0).toDouble(), (x1 - x0).toDouble())
+                    initialRulerAngle = rulerAngle.toDouble()
+                }
             }
             MotionEvent.ACTION_MOVE -> {
                 if (pointerCount == 1 && !isPanning && currentPath != null) {
@@ -367,7 +459,23 @@ class DrawingCanvasView @JvmOverloads constructor(
                     
                     // Only continue drawing if within canvas bounds
                     if (isWithinCanvasBounds(canvasX, canvasY)) {
-                        currentPath?.lineTo(canvasX, canvasY)
+                        if (selectedTool == Tool.RULER && currentRulerStartX != null) {
+                            // Project current touch onto ruler and update end
+                            val proj = RulerHelper.projectPointToRuler(canvasX, canvasY, rulerCenterX, rulerCenterY, rulerAngle, rulerLength)
+                            var ex = proj[0]
+                            var ey = proj[1]
+                            // Snap to nearby stroke endpoints/midpoints
+                            val anchor = RulerHelper.findNearestAnchor(ex, ey, strokes, anchorSnapDistancePx)
+                            if (anchor != null) {
+                                ex = anchor[0]
+                                ey = anchor[1]
+                            }
+                            currentRulerEndX = ex
+                            currentRulerEndY = ey
+                            // Update preview by drawing a temp path on screen (onDraw reads these)
+                        } else {
+                            currentPath?.lineTo(canvasX, canvasY)
+                        }
 
                         if (selectedTool == Tool.ERASER) {
                             // Erase by drawing a line between last and current points on the bitmap
@@ -397,6 +505,26 @@ class DrawingCanvasView @JvmOverloads constructor(
                     // Recompute pos so that the stored canvas focus stays under the fingers
                     posX = focusX / scaleFactor - lastCanvasFocusX
                     posY = focusY / scaleFactor - lastCanvasFocusY
+                    // Ruler manipulation: if ruler is selected and two fingers active, rotate/drag
+                    if (selectedTool == Tool.RULER && event.pointerCount >= 2) {
+                        val x0 = event.getX(0)
+                        val y0 = event.getY(0)
+                        val x1 = event.getX(1)
+                        val y1 = event.getY(1)
+                        val currentFingerAngle = kotlin.math.atan2((y1 - y0).toDouble(), (x1 - x0).toDouble())
+                        val delta = currentFingerAngle - initialFingerAngle
+                        rulerAngle = (initialRulerAngle + delta).toFloat()
+                        // Move ruler center to the centroid of the two fingers (in canvas coords)
+                        val centroidScreenX = focusX
+                        val centroidScreenY = focusY
+                        val canvasCentroid = screenToCanvasCoords(centroidScreenX, centroidScreenY)
+                        rulerCenterX = canvasCentroid[0]
+                        rulerCenterY = canvasCentroid[1]
+                        // Snap angle to common angles
+                        val angleDeg = Math.toDegrees(rulerAngle.toDouble())
+                        val snappedDeg = RulerHelper.snapAngleToCommon(angleDeg, snapAngles, snapAngleThresholdDeg)
+                        rulerAngle = Math.toRadians(snappedDeg).toFloat()
+                    }
                     lastFocusX = focusX
                     lastFocusY = focusY
                     updateTransformMatrix()
@@ -404,19 +532,42 @@ class DrawingCanvasView @JvmOverloads constructor(
                 }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                if (!isPanning && currentPath != null) {
-                    if (selectedTool == Tool.ERASER) {
-                        // Eraser already applied directly to bitmap during move; nothing to commit
+                if (!isPanning) {
+                    if (selectedTool == Tool.RULER && currentRulerStartX != null && currentRulerEndX != null) {
+                        val sx = currentRulerStartX!!
+                        val sy = currentRulerStartY!!
+                        val ex = currentRulerEndX!!
+                        val ey = currentRulerEndY!!
+                        val paint = Paint().apply {
+                            color = strokeColor
+                            style = Paint.Style.STROKE
+                            strokeWidth = strokeWidth
+                            isAntiAlias = true
+                            strokeCap = Paint.Cap.ROUND
+                            strokeJoin = Paint.Join.ROUND
+                        }
+                        // Draw straight line to bitmap
+                        bitmapCanvas?.drawLine(sx, sy, ex, ey, paint)
+                        strokes.add(Stroke(Path().apply { moveTo(sx, sy); lineTo(ex, ey) }, paint, sx, sy, ex, ey))
+                        currentRulerStartX = null
+                        currentRulerStartY = null
+                        currentRulerEndX = null
+                        currentRulerEndY = null
                         invalidate()
-                    } else if (currentPaint != null) {
-                        // Commit pen/pencil path to the bitmap
-                        bitmapCanvas?.drawPath(currentPath!!, currentPaint!!)
-                        // Save stroke for potential undo; store a copy
-                        strokes.add(Stroke(Path(currentPath), Paint(currentPaint)))
-                        invalidate()
+                    } else if (currentPath != null && currentPaint != null) {
+                        if (selectedTool == Tool.ERASER) {
+                            // Eraser already applied directly to bitmap during move; nothing to commit
+                            invalidate()
+                        } else {
+                            // Commit pen/pencil path to the bitmap
+                            bitmapCanvas?.drawPath(currentPath!!, currentPaint!!)
+                            // Save stroke for potential undo; store start and end points
+                            strokes.add(Stroke(Path(currentPath), Paint(currentPaint), currentStrokeStartX, currentStrokeStartY, lastTouchX, lastTouchY))
+                            invalidate()
+                        }
+                        currentPath = null
+                        currentPaint = null
                     }
-                    currentPath = null
-                    currentPaint = null
                 }
                 isPanning = false
                 isTouching = false
@@ -425,6 +576,7 @@ class DrawingCanvasView @JvmOverloads constructor(
         return true
     }
 
+    // Find nearest anchor (stroke endpoints or midpoints) within threshold. Returns [x,y] or null.
     fun clearCanvas() {
         strokes.clear()
         bitmap?.eraseColor(android.graphics.Color.TRANSPARENT)

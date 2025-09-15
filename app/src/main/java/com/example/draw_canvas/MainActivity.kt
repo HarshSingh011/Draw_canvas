@@ -34,6 +34,9 @@ fun DrawingScreen() {
     val selectedTool = remember { mutableStateOf("Pen") }
     val strokeWidth = remember { mutableStateOf(6f) }
     val eraserSize = remember { mutableStateOf(30f) }
+    val rulerLength = remember { mutableStateOf(1200f) }
+    val rulerSnapEnabled = remember { mutableStateOf(true) }
+    val rulerAngleDeg = remember { mutableStateOf(0f) }
     val drawingViewState = remember { mutableStateOf<DrawingCanvasView?>(null) }
 
     androidx.compose.foundation.layout.Box(
@@ -48,6 +51,8 @@ fun DrawingScreen() {
                         "Pen" -> view.setTool(DrawingCanvasView.Tool.PEN)
                         "Pencil" -> view.setTool(DrawingCanvasView.Tool.PENCIL)
                         "Eraser" -> view.setTool(DrawingCanvasView.Tool.ERASER)
+                        "Ruler" -> view.setTool(DrawingCanvasView.Tool.RULER)
+                        else -> view.setTool(DrawingCanvasView.Tool.PEN)
                     }
                     view.setStrokeWidth(strokeWidth.value)
                     view.setEraserSize(eraserSize.value)
@@ -66,6 +71,8 @@ fun DrawingScreen() {
                         "Pen" -> view.setTool(DrawingCanvasView.Tool.PEN)
                         "Pencil" -> view.setTool(DrawingCanvasView.Tool.PENCIL)
                         "Eraser" -> view.setTool(DrawingCanvasView.Tool.ERASER)
+                        "Ruler" -> view.setTool(DrawingCanvasView.Tool.RULER)
+                        else -> view.setTool(DrawingCanvasView.Tool.PEN)
                     }
                 }
             },
@@ -79,6 +86,20 @@ fun DrawingScreen() {
                 eraserSize.value = it
                 drawingViewState.value?.setEraserSize(it)
             }
+,
+            rulerLength = rulerLength.value,
+            onRulerLengthChange = { newLen ->
+                rulerLength.value = newLen
+                drawingViewState.value?.setRulerLength(newLen)
+            },
+            rulerAngleDeg = rulerAngleDeg.value,
+            onRulerAngleChange = { deg ->
+                rulerAngleDeg.value = deg
+                drawingViewState.value?.setRulerAngle(deg)
+            },
+            rulerSnapEnabled = rulerSnapEnabled.value,
+            onToggleRulerSnap = { rulerSnapEnabled.value = !rulerSnapEnabled.value },
+            onRulerReset = { drawingViewState.value?.resetRuler() }
         )
     }
 }
