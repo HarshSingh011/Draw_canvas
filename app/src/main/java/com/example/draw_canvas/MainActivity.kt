@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
@@ -35,34 +36,10 @@ fun DrawingScreen() {
     val eraserSize = remember { mutableStateOf(30f) }
     val drawingViewState = remember { mutableStateOf<DrawingCanvasView?>(null) }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        bottomBar = {
-                ToolSection(
-                selectedTool = selectedTool.value,
-                onToolSelected = {
-                    selectedTool.value = it
-                    drawingViewState.value?.let { view ->
-                        when (it) {
-                            "Pen" -> view.setTool(DrawingCanvasView.Tool.PEN)
-                            "Pencil" -> view.setTool(DrawingCanvasView.Tool.PENCIL)
-                            "Eraser" -> view.setTool(DrawingCanvasView.Tool.ERASER)
-                        }
-                    }
-                },
-                strokeWidth = strokeWidth.value,
-                onStrokeWidthChange = {
-                    strokeWidth.value = it
-                    drawingViewState.value?.setStrokeWidth(it)
-                },
-                eraserSize = eraserSize.value,
-                onEraserSizeChange = {
-                    eraserSize.value = it
-                    drawingViewState.value?.setEraserSize(it)
-                }
-            )
-        }
-    ) { innerPadding ->
+    androidx.compose.foundation.layout.Box(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        // Canvas takes full screen
         AndroidView(
             factory = { context ->
                 DrawingCanvasView(context).also { view ->
@@ -76,9 +53,32 @@ fun DrawingScreen() {
                     view.setEraserSize(eraserSize.value)
                 }
             },
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
+            modifier = Modifier.fillMaxSize()
+        )
+        
+        // ToolSection floating on top of canvas
+        ToolSection(
+            selectedTool = selectedTool.value,
+            onToolSelected = {
+                selectedTool.value = it
+                drawingViewState.value?.let { view ->
+                    when (it) {
+                        "Pen" -> view.setTool(DrawingCanvasView.Tool.PEN)
+                        "Pencil" -> view.setTool(DrawingCanvasView.Tool.PENCIL)
+                        "Eraser" -> view.setTool(DrawingCanvasView.Tool.ERASER)
+                    }
+                }
+            },
+            strokeWidth = strokeWidth.value,
+            onStrokeWidthChange = {
+                strokeWidth.value = it
+                drawingViewState.value?.setStrokeWidth(it)
+            },
+            eraserSize = eraserSize.value,
+            onEraserSizeChange = {
+                eraserSize.value = it
+                drawingViewState.value?.setEraserSize(it)
+            }
         )
     }
 }
